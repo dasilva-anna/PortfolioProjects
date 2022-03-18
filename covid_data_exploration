@@ -1,0 +1,244 @@
+SELECT *
+FROM
+ `zippy-facility-338700.Covid.CovidDeaths`
+WHERE
+    continent IS NOT NULL 
+ORDER BY 3, 4
+
+# Select Data that I'm going to be using
+SELECT
+    location, date, total_cases, new_cases, total_deaths, population
+FROM
+ `zippy-facility-338700.Covid.CovidDeaths`
+WHERE
+    continent IS NOT NULL 
+ORDER BY 1,2
+
+# Looking at Total Cases vs Total Deaths
+#Shows the likelihood of dying if you contract COVID in Canada
+SELECT
+    location, date, total_deaths, total_cases, 
+    (total_deaths/total_cases)*100 AS death_percentage
+FROM
+ `zippy-facility-338700.Covid.CovidDeaths`
+ WHERE
+    continent IS NOT NULL AND
+    location = 'Canada'
+ ORDER BY 1,2
+
+# Looking at the total cases vs the population
+# Shows what percentage of population got COVID
+SELECT
+    location, date, population, total_cases, 
+    (total_cases/population)*100 AS infection_rate
+FROM
+ `zippy-facility-338700.Covid.CovidDeaths`
+ # WHERE location = 'Canada'
+ ORDER BY 1,2
+
+ # Looking at countries with highest infection rate compared to populations
+SELECT
+    location, population, 
+    MAX(total_cases) AS highest_infection_count, 
+    MAX((total_cases/population))*100 AS infection_rate
+FROM
+ `zippy-facility-338700.Covid.CovidDeaths`
+WHERE
+    continent IS NOT NULL 
+GROUP BY
+    location, population
+ORDER BY 
+ infection_rate DESC
+
+# Showing the countries with the highest death count per population
+SELECT
+    location, 
+    MAX(total_deaths) as total_death_count
+FROM
+ `zippy-facility-338700.Covid.CovidDeaths`
+ WHERE
+    continent IS NOT NULL 
+ GROUP BY
+    location
+ ORDER BY 
+ total_death_count DESC
+# Breaking things down by continent
+SELECT
+    continent, 
+    MAX(total_deaths) as total_death_count
+FROM
+ `zippy-facility-338700.Covid.CovidDeaths`
+ WHERE
+    continent IS NOT NULL 
+ GROUP BY
+    continent
+ ORDER BY 
+ total_death_count DESC
+
+# Global numbers
+SELECT
+    date, 
+    SUM(new_cases) AS total_cases,
+    SUM(new_deaths) AS total_deaths,
+    SUM(new_deaths)/SUM(new_cases)*100 AS death_percentage
+FROM
+ `zippy-facility-338700.Covid.CovidDeaths`
+ WHERE
+    continent IS NOT NULL
+GROUP BY
+    date
+ ORDER BY 1,2
+
+SELECT 
+    SUM(new_cases) AS total_cases,
+    SUM(new_deaths) AS total_deaths,
+    SUM(new_deaths)/SUM(new_cases)*100 AS death_percentage
+FROM
+ `zippy-facility-338700.Covid.CovidDeaths`
+ WHERE
+    continent IS NOT NULL
+# Looking at total population vs vaccinations
+WITH PopvsVac
+AS
+(
+    SELECT
+        dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations,
+        SUM(vac.new_vaccinations) OVER(PARTITION BY dea.location ORDER BY dea.location, dea.date) AS rolling_people_vaccinated
+    FROM
+        `zippy-facility-338700.Covid.CovidDeaths` dea
+    JOIN
+        `zippy-facility-338700.Covid.CovidVaccinations` vac
+        ON dea.location = vac.location
+        AND dea.date = vac.date
+    WHERE
+        dea.continent IS NOT NULL
+)
+SELECT *,
+    (rolling_people_vaccinated/population)*100 AS vaccination_percentage
+FROM
+ PopvsVac
+
+
+# Temp table
+DROP Table IF EXISTS zippy-facility-338700.Covid.PercentPopulationVaccinated;
+CREATE TABLE zippy-facility-338700.Covid.PercentPopulationVaccinated
+(
+    continent STRING,
+    location STRING,
+    date DATE,
+    population INTEGER,
+    new_vaccinations INTEGER,
+    rolling_people_vaccinated INTEGER
+);
+INSERT INTO zippy-facility-338700.Covid.PercentPopulationVaccinated 
+SELECT
+    dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations,
+    SUM(vac.new_vaccinations) OVER(PARTITION BY dea.location ORDER BY dea.location, dea.date) AS rolling_people_vaccinated
+FROM
+    `zippy-facility-338700.Covid.CovidDeaths` dea
+JOIN
+    `zippy-facility-338700.Covid.CovidVaccinations` vac
+     ON dea.location = vac.location
+    AND dea.date = vac.date
+;
+
+SELECT *,
+    (rolling_people_vaccinated/population)*100 AS vaccination_percentage
+FROM
+ zippy-facility-338700.Covid.PercentPopulationVaccinated
+
+#Creating view to store data for later visualizations
+DROP Table IF EXISTS zippy-facility-338700.Covid.PercentPopulationVaccinated;
+CREATE VIEW `zippy-facility-338700.Covid.PercentPopulationVaccinated` 
+AS
+    SELECT
+        dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations,
+        SUM(vac.new_vaccinations) OVER(PARTITION BY dea.location ORDER BY dea.location, dea.date) AS rolling_people_vaccinated
+    FROM
+        `zippy-facility-338700.Covid.CovidDeaths` dea
+    JOIN
+        `zippy-facility-338700.Covid.CovidVaccinations` vac
+        ON dea.location = vac.location
+        AND dea.date = vac.date
+    WHERE
+        dea.continent IS NOT NULL
+
+CREATE VIEW zippy-facility-338700.Covid.DeathsvsCases
+AS
+    SELECT
+        location, date, total_deaths, total_cases, 
+        (total_deaths/total_cases)*100 AS death_percentage
+    FROM
+    `zippy-facility-338700.Covid.CovidDeaths`
+    WHERE
+        continent IS NOT NULL AND
+        location = 'Canada'
+    ORDER BY 1,2
+
+CREATE VIEW zippy-facility-338700.Covid.CasesvsPop
+AS
+    SELECT
+    location, date, population, total_cases, 
+    (total_cases/population)*100 AS infection_rate
+    FROM
+    `zippy-facility-338700.Covid.CovidDeaths`
+    ORDER BY 1,2
+
+CREATE VIEW zippy-facility-338700.Covid.HighestInfectionRate
+AS
+    SELECT
+        location, population, 
+        MAX(total_cases) AS highest_infection_count, 
+        MAX((total_cases/population))*100 AS infection_rate
+    FROM
+    `zippy-facility-338700.Covid.CovidDeaths`
+    WHERE
+        continent IS NOT NULL 
+    GROUP BY
+        location, population
+    ORDER BY 
+    infection_rate DESC
+
+CREATE VIEW zippy-facility-338700.Covid.HighestDeathCount
+AS
+    SELECT
+        location, 
+        MAX(total_deaths) as total_death_count
+    FROM
+    `zippy-facility-338700.Covid.CovidDeaths`
+    WHERE
+        continent IS NOT NULL 
+    GROUP BY
+        location
+    ORDER BY 
+    total_death_count DESC
+
+
+CREATE VIEW zippy-facility-338700.Covid.ContinentalDeathCount
+AS
+    SELECT
+        continent, 
+        MAX(total_deaths) as total_death_count
+    FROM
+    `zippy-facility-338700.Covid.CovidDeaths`
+    WHERE
+        continent IS NOT NULL 
+    GROUP BY
+        continent
+    ORDER BY 
+    total_death_count DESC
+
+CREATE VIEW zippy-facility-338700.Covid.GlobalNumbers
+AS
+    SELECT
+        date, 
+        SUM(new_cases) AS total_cases,
+        SUM(new_deaths) AS total_deaths,
+        SUM(new_deaths)/SUM(new_cases)*100 AS death_percentage
+    FROM
+    `zippy-facility-338700.Covid.CovidDeaths`
+    WHERE
+        continent IS NOT NULL
+    GROUP BY
+        date
+    ORDER BY 1,2;
