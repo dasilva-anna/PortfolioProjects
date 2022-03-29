@@ -1,0 +1,250 @@
+DROP TABLE IF EXISTS nashville_housing;
+CREATE TABLE nashville_housing
+	(UniqueID numeric,
+	 ParcelID text,
+	 LandUse text,
+	 PropertyAddress text,
+	 SaleDate date,
+	 SalePrice text,
+	 LegalReference text,
+	 SoldAsVacant text,
+	 OwnerName text,
+	 OwnerAddress text,
+	 Acreage numeric,
+	 TaxDistrict text,
+	 LandValue numeric,
+	 BuildingValue numeric,
+	 TotalValue numeric,
+	 YearBuilt text,
+	 Bedrooms numeric,
+	 FullBath numeric,
+	 HalfBath numeric
+	);
+COPY nashville_housing
+  FROM '/Users/anna/nashville_housing.csv' HEADER CSV DELIMITER ',';
+  
+-- Populate property address data
+SELECT *
+FROM
+	nashville_housing
+-- WHERE propertyaddress is NULL;
+ORDER BY
+	parcelid;
+
+SELECT a.parcelid, a.propertyaddress, b.parcelid, b.propertyaddress
+FROM
+	nashville_housing a
+JOIN 
+	nashville_housing b
+	on 
+	a.parcelid = b.parcelid
+	AND a.uniqueid <> b.uniqueid
+WHERE
+	a.propertyaddress is NULL;
+
+UPDATE nashville_housing a
+SET propertyaddress = COALESCE(b.propertyaddress)
+FROM nashville_housing b
+WHERE
+	a.propertyaddress IS NULL
+	AND b.parcelid = a.parcelid
+	AND a.uniqueid <> b.uniqueid
+
+-- Breaking out address into individual columns (address, city, state)
+SELECT
+	SUBSTRING(propertyaddress, 1, STRPOS (propertyaddress, ',') - 1) AS address,
+	SUBSTRING(propertyaddress, STRPOS (propertyaddress, ',') + 1, LENGTH(propertyaddress)) AS city
+FROM
+	nashville_housing
+	
+ALTER TABLE
+	nashville_housing
+ADD
+	propertysplitaddress TEXT;
+UPDATE
+	nashville_housing
+SET
+	propertysplitaddress = SUBSTRING(propertyaddress, 1, STRPOS (propertyaddress, ',') - 1);
+
+ALTER TABLE
+	nashville_housing
+ADD
+	propertysplitcity TEXT;
+UPDATE
+	nashville_housing
+SET
+	propertysplitcity = SUBSTRING(propertyaddress, STRPOS (propertyaddress, ',') + 1, LENGTH(propertyaddress));
+	
+SELECT 
+	owneraddress
+FROM
+	nashville_housing;
+
+SELECT
+	SPLIT_PART(owneraddress, ',',1),
+	SPLIT_PART(owneraddress, ',',2),
+	SPLIT_PART(owneraddress, ',',3)
+FROM
+	nashville_housing
+
+ALTER TABLE
+	nashville_housing
+ADD
+	ownersplitaddress TEXT;
+UPDATE
+	nashville_housing
+SET
+	ownersplitaddress = SPLIT_PART(owneraddress, ',',1);
+
+ALTER TABLE
+	nashville_housing
+ADD
+	ownersplitcity TEXT;
+UPDATE
+	nashville_housing
+SET
+	ownersplitcity = SPLIT_PART(owneraddress, ',',2);
+
+ALTER TABLE
+	nashville_housing
+ADD
+	ownersplitstate TEXT;
+UPDATE
+	nashville_housing
+SET
+	ownersplitstate = SPLIT_PART(owneraddress, ',',3);
+
+-- Fixing typos on the sold as vacant column
+SELECT
+	soldasvacant
+FROM
+	nashville_housing
+WHERE
+	soldasvacant = 'Y' 
+
+UPDATE
+	nashville_housing
+SET
+	soldasvacant = 'Yes'
+WHERE
+	soldasvacant = 'Y'
+
+SELECT
+	soldasvacant
+FROM
+	nashville_housing
+WHERE
+	soldasvacant = 'N' 
+
+UPDATE
+	nashville_housing
+SET
+	soldasvacant = 'No'
+WHERE
+	soldasvacant = 'N'
+
+-- Removing duplicates
+with rownumcte AS (
+   DELETE
+   FROM nashville_housing
+   RETURNING *
+	), 
+	rownumcte2 AS (
+    SELECT
+        ROW_NUMBER() OVER(
+			PARTITION BY 
+			parcelid, 
+			propertyaddress,
+			saleprice,
+			saledate,
+			legalreference
+			ORDER BY
+			uniqueid) AS row_num,
+        *
+    FROM rownumcte
+)
+INSERT INTO nashville_housing
+SELECT
+	uniqueid,
+	parcelid, 
+	propertyaddress,
+	saleprice,
+	saledate,
+	legalreference
+FROM rownumcte2
+where row_num = 1
+
+WITH rownumcte AS(
+	SELECT *,
+		ROW_NUMBER () OVER(
+		PARTITION BY parcelid, 
+			propertyaddress,
+			saleprice,
+			saledate,
+			legalreference
+			ORDER BY
+				uniqueid) AS row_num
+	FROM
+		nashville_housing
+)
+SELECT * 
+FROM
+	rownumcte
+WHERE
+	row_num > 1
+
+-- Delete unused columns
+
+SELECT *
+FROM
+	nashville_housing
+
+ALTER TABLE
+	nashville_housing
+DROP COLUMN
+	taxdistrict,
+	propertyaddress,
+	owneraddress
+
+
+
+
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+	
+	
+	
+	
+	
+	
